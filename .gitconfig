@@ -1,0 +1,9 @@
+[user]
+  name = Alkis Evlogimenos
+  email = alkis@evlogimenos.com
+
+[color]
+  ui = auto
+
+[core]
+  excludesfile = ~/.gitignore

@@ -1,0 +1,16 @@
+# Emacs backups
+*~
+
+# Emacs autosaves
+\#*\#
+.\#*
+
+# Emacs bytecode
+*.elc
+
+# Object files
+*.o
+
+# Python bytecode
+*.pyc
+*.pyo
