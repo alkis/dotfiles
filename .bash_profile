@@ -21,4 +21,4 @@ elif [ -x $MACPORTS_EMACS ]; then
     export EDITOR="$MACPORTS_EMACS -c"
 else
     export EDITOR="/usr/bin/emacsclient -c"
-end
+fi
