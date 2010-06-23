@@ -54,27 +54,6 @@
 ;;
 ;; See the Magit User Manual for more information.
 
-;;; TODO
-
-;; For 0.8:
-;;
-;; - Fix display of unmerged files.
-;; - Fix performance problems with large status buffers.
-;; - Handle the case where remote and local branches have different names.
-;;
-;; Later:
-;;
-;; - Queuing of asynchronous commands.
-;; - Good email integration.
-;; - Showing tags.
-;; - Visiting from staged hunks doesn't always work since the line
-;;   numbers don't refer to the working tree.  Fix that somehow.
-;; - Figure out how to discard staged changes for files that also have
-;;   unstaged changes.
-;; - Get current defun from removed lines in a diff
-;; - Amending commits other than HEAD.
-;; - 'Subsetting', only looking at a subset of all files.
-
 (eval-when-compile (require 'cl))
 (require 'log-edit)
 (require 'easymenu)
@@ -499,6 +478,14 @@ Many Magit faces inherit from this one by default."
 	(substring head 11)
       nil)))
 
+(defun magit-get-current-remote ()
+  "Return the name of the remote for the current branch.
+If there is no current branch, or no remote for that branch,
+return nil."
+  (let* ((branch (magit-get-current-branch))
+         (remote (and branch (magit-get "branch" branch "remote"))))
+    (if (string= remote "") nil remote)))
+
 (defun magit-ref-exists-p (ref)
   (= (magit-git-exit-code "show-ref" "--verify" ref) 0))
 
@@ -651,6 +638,19 @@ Many Magit faces inherit from this one by default."
 		(match-string 1 branch)
 		branch)))))
 
+(defun magit-read-remote (&optional prompt def)
+  "Read the name of a remote.
+PROMPT is used as the prompt, and defaults to \"Remote\".
+DEF is the default value, and defaults to the value of `magit-get-current-branch'."
+  (let* ((prompt (or prompt "Remote"))
+         (def (or def (magit-get-current-remote)))
+         (prompt (if def
+		     (format "%s (default %s): " prompt def)
+		   (format "%s: " prompt)))
+	 (remotes (magit-git-lines "remote"))
+	 (reply (funcall magit-completing-read prompt remotes
+				 nil nil nil nil def)))
+    (if (string= reply "") nil reply)))
 
 ;;; Sections
 
@@ -2581,15 +2581,30 @@ With prefix argument, add remaining untracked files as well.
 
 ;;; Branches
 
+(defun magit-get-tracking-name (remote branch)
+  "Given a REMOTE and a BRANCH name, ask the user for a local
+tracking brach name suggesting a sensible default."
+  (when (yes-or-no-p
+         (format "Create local tracking branch for %s? " branch))
+    (let* ((default-name (concat remote "-" branch))
+           (chosen-name (read-string (format "Call local branch (%s): " default-name)
+                                     nil
+                                     nil
+                                     default-name)))
+      (when (magit-ref-exists-p (concat "refs/heads/" chosen-name))
+        (error "'%s' already exists." chosen-name))
+      chosen-name)))
+
 (defun magit-maybe-create-local-tracking-branch (rev)
-  (if (string-match "^refs/remotes/\\([^/]+\\)/\\(.+\\)" rev)
-      (let ((remote (match-string 1 rev))
-	    (branch (match-string 2 rev)))
-	(when (and (not (magit-ref-exists-p (concat "refs/heads/" branch)))
-		   (yes-or-no-p
-		    (format "Create local tracking branch for %s? " branch)))
-	  (magit-run-git "checkout" "-b" branch rev)
-	  t))
+  "Depending on the users wishes, create a tracking branch for
+rev... maybe."
+  (if (string-match "^\\(?:refs/\\)?remotes/\\([^/]+\\)/\\(.+\\)" rev)
+      (let* ((remote (match-string 1 rev))
+             (branch (match-string 2 rev))
+             (tracker-name (magit-get-tracking-name remote branch)))
+        (when tracker-name
+          (magit-run-git "checkout" "-b" tracker-name rev)
+          t))
     nil))
 
 (defun magit-checkout (revision)
@@ -2948,11 +2963,17 @@ Uncomitted changes in both working tree and staging area are lost.
 
 ;;; Updating, pull, and push
 
-(defun magit-remote-update ()
-  (interactive)
-  (if (magit-svn-enabled)
-      (magit-run-git-async "svn" "fetch")
-    (magit-run-git-async "remote" "update")))
+(defun magit-remote-update (&optional remote)
+  "Update REMOTE. If nil, update all remotes.
+
+When called interactively, update the current remote unless a
+prefix arg is given.  With prefix arg, prompt for a remote and
+update it."
+  (interactive (list (when current-prefix-arg (magit-read-remote))))
+  (cond
+   ((magit-svn-enabled) (magit-run-git-async "svn" "fetch"))
+   (remote (magit-run-git-async "fetch" remote))
+   (t (magit-run-git-async "remote" "update"))))
 
 (defun magit-pull ()
   (interactive)
@@ -2992,13 +3013,6 @@ typing and automatically refreshes the status buffer."
                                 magit-git-standard-options)
                           args)
                   nil nil nil t))))
-
-(defun magit-read-remote (prompt def)
-  (funcall magit-completing-read (if def
-		       (format "%s (default %s): " prompt def)
-		     (format "%s: " prompt))
-		   (magit-git-lines "remote")
-		   nil nil nil nil def))
 
 (defun magit-push ()
   (interactive)
@@ -4003,7 +4017,7 @@ Return values:
 (defun magit-branches-window-checkout ()
   "Check out the branch in the line at point."
   (interactive)
-  (magit-run-git "checkout" (magit--branch-name-at-point))
+  (magit-checkout (magit--branch-name-at-point))
   (save-excursion
     (magit-show-branches)))
 
@@ -4041,7 +4055,7 @@ With prefix force the removal even it it hasn't been merged."
   "Extract details from branch -va output."
   (string-match (concat
                  "^\\(\\*? \\{1,2\\}\\)"      ; current branch marker (maybe)
-                 "\\(remotes/\\)?\\(.+?\\) +" ; is it remote, branch name
+                 "\\(.+?\\) +"                ; branch name
 
                  "\\(?:"
                  "\\([0-9a-fA-F]\\{7\\}\\) "  ; sha1
@@ -4052,14 +4066,13 @@ With prefix force the removal even it it hasn't been merged."
                  )
                 branch-line)
   (let ((res (list (cons 'current (match-string 1 branch-line))
-                   (cons 'remote  (not (not (match-string 2 branch-line))))
-                   (cons 'branch  (match-string 3 branch-line)))))
-    (if (match-string 5 branch-line)
+                   (cons 'branch  (match-string 2 branch-line)))))
+    (if (match-string 4 branch-line)
         (cons (cons 'other-ref (match-string 6 branch-line)) res)
       (append
        (list
-        (cons 'sha1 (match-string 4 branch-line))
-        (cons 'msg (match-string 6 branch-line)))
+        (cons 'sha1 (match-string 3 branch-line))
+        (cons 'msg (match-string 5 branch-line)))
        res))))
 
 (defun magit-show-branches ()
