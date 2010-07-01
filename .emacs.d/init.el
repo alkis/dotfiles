@@ -1,3 +1,6 @@
+;; Start server
+(server-start)
+
 ;; Set load path
 (add-to-list 'load-path (expand-file-name "~/.emacs.d/lib"))
 
@@ -34,6 +37,7 @@
  '(cua-mode t nil (cua-base))
  '(current-language-environment "UTF-8")
  '(global-auto-revert-mode t)
+ '(ido-mode (quote both) nil (ido))
  '(indent-tabs-mode nil)
  '(js2-basic-offset 2)
  '(js2-cleanup-whitespace t)
