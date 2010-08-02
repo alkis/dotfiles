@@ -12,13 +12,13 @@ shopt -s cmdhist
 shopt -s histappend
 export PROMPT_COMMAND="history -a; history -n"
 
+MACPORTS_EMACS=/Applications/MacPorts/Emacs.app/Contents/MacOS/bin/emacsclient
 EMACS_APP=/Applications/Emacs.app/Contents/MacOS/bin/emacsclient
-MACPORTS_EMACS=/opt/local/bin/emacsclient
 
-if [ -x $EMACS_APP ]; then
-    export EDITOR="$EMACS_APP -c"
-elif [ -x $MACPORTS_EMACS ]; then
+if [ -x $MACPORTS_EMACS ]; then
     export EDITOR="$MACPORTS_EMACS -c"
+elif [ -x $EMACS_APP ]; then
+    export EDITOR="$EMACS_APP -c"
 else
     export EDITOR="/usr/bin/emacsclient -c"
 fi
