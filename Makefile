@@ -1,2 +1,2 @@
 all:
-	rsync -Cav $(PWD) $(HOME)
+	rsync -Cav --exclude Makefile $(PWD)/ $(HOME)/
