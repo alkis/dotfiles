@@ -33,6 +33,8 @@
  '(cua-mode t nil (cua-base))
  '(current-language-environment "UTF-8")
  '(global-auto-revert-mode t)
+ '(ido-default-buffer-method (quote selected-window))
+ '(ido-default-file-method (quote selected-window))
  '(ido-mode (quote both) nil (ido))
  '(indent-tabs-mode nil)
  '(js-indent-level 2)
